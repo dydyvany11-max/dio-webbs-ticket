@@ -81,3 +81,7 @@ secrets.env
 .docker
 tei_cache
 *.mp3
+
+# PostgreSQL backups
+backups/postgres/*
+!backups/postgres/.gitkeep

@@ -1,0 +1,56 @@
+groups:
+  - name: basic-alerts
+    rules:
+      - alert: ExporterDown
+        expr: up{job=~"postgres-exporter|redis-exporter|backup-exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Exporter недоступен ({{ $labels.job }})"
+          description: "Цель {{ $labels.instance }} недоступна более 2 минут."
+
+      - alert: PostgresServiceDown
+        expr: pg_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL недоступен"
+          description: "postgres-exporter сообщает, что PostgreSQL недоступен."
+
+      - alert: RedisTooManyConnections
+        expr: redis_connected_clients > 200
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Слишком много Redis-клиентов"
+          description: "Количество подключений к Redis: {{ $value }}."
+
+      - alert: RedisServiceDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis недоступен"
+          description: "redis-exporter сообщает, что Redis недоступен (redis_up=0)."
+
+      - alert: PostgresBackupStale
+        expr: postgres_backup_fresh == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Бэкап PostgreSQL устарел"
+          description: "Свежий бэкап не найден. Проверьте сервис postgres-backup."
+
+      - alert: BackendDown
+        expr: up{job="backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend недоступен"
+          description: "Prometheus не может получить метрики backend (/metrics)."

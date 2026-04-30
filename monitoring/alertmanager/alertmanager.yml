@@ -1,0 +1,13 @@
+global:
+  smtp_smarthost: "maildev:1025"
+  smtp_from: "alerts@local.test"
+  smtp_require_tls: false
+
+route:
+  receiver: email-default
+
+receivers:
+  - name: email-default
+    email_configs:
+      - to: "you@example.com"
+        send_resolved: true

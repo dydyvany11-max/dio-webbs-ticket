@@ -7,7 +7,12 @@ import uvicorn
 from fastapi import APIRouter, FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from redis.exceptions import RedisError
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
+from src.core.database import engine
+from src.core.observability import configure_logging, setup_metrics
 from src.core.redis import redis_client
 from src.core.settings import settings
 from src.crm.router import router as counterparty_router
@@ -17,6 +22,8 @@ from src.proofreading.router import router as proofreading_router
 from src.shared.domain.exceptions import AppError
 from src.shared.utils.cli import run_cli_command
 from src.tickets.routers import router as tickets_router
+
+configure_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +43,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+setup_metrics(app)
 
 router = APIRouter(prefix="/api/v1")
 
@@ -54,6 +62,39 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/health", include_in_schema=False)
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/ready", include_in_schema=False)
+async def ready() -> JSONResponse:
+    checks = {"postgres": False, "redis": False}
+
+    try:
+        async with engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
+        checks["postgres"] = True
+    except SQLAlchemyError:
+        checks["postgres"] = False
+
+    try:
+        await redis_client.ping()
+        checks["redis"] = True
+    except RedisError:
+        checks["redis"] = False
+
+    is_ready = all(checks.values())
+    http_status = status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE
+    return JSONResponse(
+        status_code=http_status,
+        content={
+            "status": "ready" if is_ready else "not_ready",
+            "checks": checks,
+        },
+    )
 
 
 @app.exception_handler(ValueError)
@@ -88,5 +129,4 @@ def app_exception_handler(request: Request, exc: AppError) -> JSONResponse:  # n
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
     uvicorn.run(app, host="0.0.0.0", port=settings.app.port)  # noqa: S104

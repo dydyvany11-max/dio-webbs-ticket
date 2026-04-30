@@ -1,0 +1,10 @@
+filebeat.inputs:
+  - type: filestream
+    id: backend_logs
+    enabled: true
+    paths:
+      - /var/log/backend/backend.log
+
+output.logstash:
+  hosts:
+    - logstash:5044

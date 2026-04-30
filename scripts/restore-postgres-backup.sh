@@ -1,41 +1,41 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Quick commands (run from project root):
-# 1) Start services:
+# Быстрые команды (запускать из корня проекта):
+# 1) Поднять сервисы:
 #    docker compose up -d postgres postgres-backup
 #
-# 2) Prepare smoke data:
+# 2) Подготовить тестовые данные:
 #    docker compose exec -T postgres psql -U diocontickets -d diocontickets_db -c "CREATE TABLE IF NOT EXISTS public.backup_smoke(id int primary key, note text); INSERT INTO public.backup_smoke(id,note) VALUES (1,'before_backup') ON CONFLICT (id) DO UPDATE SET note=EXCLUDED.note;"
 #
-# 3) Create backup now:
+# 3) Создать бэкап вручную:
 #    docker compose run --rm postgres-backup /backup.sh
 #
-# 4) Break data:
+# 4) Изменить данные (для проверки восстановления):
 #    docker compose exec -T postgres psql -U diocontickets -d diocontickets_db -c "UPDATE public.backup_smoke SET note='broken' WHERE id=1;"
 #
-# 5) Restore last backup:
+# 5) Восстановить последний бэкап:
 #    bash scripts/restore-postgres-backup.sh
 #
-# 6) Verify restore result:
+# 6) Проверить результат восстановления:
 #    docker compose exec -T postgres psql -U diocontickets -d diocontickets_db -c "SELECT * FROM public.backup_smoke;"
 #
 usage() {
   cat <<'EOF'
-Usage:
+Использование:
   bash scripts/restore-postgres-backup.sh [--file <path>] [--no-reset]
   bash scripts/restore-postgres-backup.sh [<path-to-backup>]
 
-Description:
-  Restores PostgreSQL from .sql or .sql.gz backup using docker compose.
-  By default, the script resets the target database before restore.
+Описание:
+  Восстанавливает PostgreSQL из бэкапа .sql или .sql.gz через docker compose.
+  По умолчанию перед восстановлением целевая база пересоздаётся.
 
-Options:
-  --file <path>  Path to backup file (.sql or .sql.gz).
-  --no-reset     Do not drop/recreate database before restore.
-  -h, --help     Show this help.
+Опции:
+  --file <path>  Путь к файлу бэкапа (.sql или .sql.gz).
+  --no-reset     Не удалять/создавать базу перед восстановлением.
+  -h, --help     Показать эту справку.
 
-Examples:
+Примеры:
   bash scripts/restore-postgres-backup.sh
   bash scripts/restore-postgres-backup.sh backups/postgres/last/app-20260428-030001.sql.gz
   bash scripts/restore-postgres-backup.sh --file backups/postgres/last/app-20260428-030001.sql.gz --no-reset
@@ -52,7 +52,7 @@ reset_db="true"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --file)
-      [[ $# -ge 2 ]] || { echo "Error: --file requires a value" >&2; exit 1; }
+      [[ $# -ge 2 ]] || { echo "Ошибка: для --file нужно указать значение" >&2; exit 1; }
       backup_file="$2"
       shift 2
       ;;
@@ -65,13 +65,13 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     -*)
-      echo "Error: unknown option '$1'" >&2
+      echo "Ошибка: неизвестная опция '$1'" >&2
       usage
       exit 1
       ;;
     *)
       if [[ -n "${backup_file}" ]]; then
-        echo "Error: backup file is already specified: '${backup_file}'" >&2
+        echo "Ошибка: файл бэкапа уже указан: '${backup_file}'" >&2
         exit 1
       fi
       backup_file="$1"
@@ -89,18 +89,18 @@ if [[ -f ".env" ]]; then
   set +a
 fi
 
-: "${POSTGRES_USER:?POSTGRES_USER is not set. Add it to .env}"
-: "${POSTGRES_DB:?POSTGRES_DB is not set. Add it to .env}"
+: "${POSTGRES_USER:?POSTGRES_USER не задан. Добавьте его в .env}"
+: "${POSTGRES_DB:?POSTGRES_DB не задан. Добавьте его в .env}"
 
 if [[ -z "${backup_file}" ]]; then
   if [[ ! -d "${BACKUPS_DIR}" ]]; then
-    echo "Error: backups directory not found: ${BACKUPS_DIR}" >&2
+    echo "Ошибка: директория бэкапов не найдена: ${BACKUPS_DIR}" >&2
     exit 1
   fi
 
   backup_file="$(find "${BACKUPS_DIR}" -type f \( -name '*.sql.gz' -o -name '*.sql' \) | sort | tail -n 1)"
   if [[ -z "${backup_file}" ]]; then
-    echo "Error: no backup files found in ${BACKUPS_DIR}" >&2
+    echo "Ошибка: в ${BACKUPS_DIR} не найдено файлов бэкапа" >&2
     exit 1
   fi
 fi
@@ -109,7 +109,7 @@ if [[ ! -f "${backup_file}" ]]; then
   if [[ -f "${PROJECT_ROOT}/${backup_file}" ]]; then
     backup_file="${PROJECT_ROOT}/${backup_file}"
   else
-    echo "Error: backup file not found: ${backup_file}" >&2
+    echo "Ошибка: файл бэкапа не найден: ${backup_file}" >&2
     exit 1
   fi
 fi
@@ -117,15 +117,15 @@ fi
 backup_file="$(cd "$(dirname "${backup_file}")" && pwd)/$(basename "${backup_file}")"
 
 if ! docker compose version > /dev/null 2>&1; then
-  echo "Error: docker compose is not available" >&2
+  echo "Ошибка: docker compose недоступен" >&2
   exit 1
 fi
 
-echo "[restore] Using backup: ${backup_file}"
-echo "[restore] Starting postgres service..."
+echo "[restore] Используется бэкап: ${backup_file}"
+echo "[restore] Запуск сервиса postgres..."
 docker compose up -d postgres > /dev/null
 
-echo "[restore] Waiting for postgres readiness..."
+echo "[restore] Ожидание готовности postgres..."
 ready="false"
 for _ in $(seq 1 30); do
   if docker compose exec -T postgres pg_isready -U "${POSTGRES_USER}" -d postgres > /dev/null 2>&1; then
@@ -136,12 +136,12 @@ for _ in $(seq 1 30); do
 done
 
 if [[ "${ready}" != "true" ]]; then
-  echo "Error: postgres is not ready after 60 seconds" >&2
+  echo "Ошибка: postgres не готов спустя 60 секунд" >&2
   exit 1
 fi
 
 if [[ "${reset_db}" == "true" ]]; then
-  echo "[restore] Resetting database '${POSTGRES_DB}'..."
+  echo "[restore] Пересоздание базы '${POSTGRES_DB}'..."
   docker compose exec -T postgres psql \
     -v ON_ERROR_STOP=1 \
     -U "${POSTGRES_USER}" \
@@ -151,13 +151,13 @@ DROP DATABASE IF EXISTS :"target_db" WITH (FORCE);
 CREATE DATABASE :"target_db";
 SQL
 else
-  echo "[restore] Restoring without database reset (--no-reset)."
+  echo "[restore] Восстановление без пересоздания базы (--no-reset)."
 fi
 
-echo "[restore] Restoring data..."
+echo "[restore] Восстановление данных..."
 filter_psql_restrict() {
-  # Some dumps may contain psql metacommands unsupported by older psql clients.
-  # They are safe to strip for restore in trusted environments.
+  # В некоторых дампах встречаются psql-метакоманды, которые не понимают старые psql-клиенты.
+  # Для восстановления в доверенной среде их можно безопасно удалить из потока.
   sed -e '/^\\restrict /d' -e '/^\\unrestrict /d'
 }
 
@@ -167,4 +167,4 @@ else
   cat "${backup_file}" | filter_psql_restrict | docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER}" -d "${POSTGRES_DB}"
 fi
 
-echo "[restore] Restore completed successfully."
+echo "[restore] Восстановление завершено успешно."
